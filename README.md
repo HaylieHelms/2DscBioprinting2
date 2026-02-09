@@ -2,8 +2,7 @@
 
 
 
-![GraphicalAbstract](https://github.com/user-attachments/assets/0106bba7-ead9-4d18-919b-26fec015ca63)
-
+![scBioprinting GA](https://github.com/user-attachments/assets/f99a9cb7-0931-48b6-81e2-e2755c68d646)
 
 
 ### Abstract
