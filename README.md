@@ -1,7 +1,8 @@
 # A Single-Cell Bioprinting Approach with Subcellular Resolution to Reconstruct Native Cellular Microenvironments and Interrogate Spatial Biology
 
 
-![scBioprinting GA](https://github.com/user-attachments/assets/fba49a8c-a429-40bd-b0e9-a3539b2b3c24)
+![scBioprinting GA](https://github.com/user-attachments/assets/ed84cd2b-b0bf-4273-9bad-a2de3926b3ee)
+
 
 
 ### Abstract
