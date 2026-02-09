@@ -1,7 +1,5 @@
 *.Rmd linguist-language=R
 *.Rmd linguist-detectable=true
 
-Scripts/Python/*.ipynb linguist-language=Python
-Scripts/Python/*.ipynb linguist-detectable=true
-Scripts/Python/*.ipynb linguist-generated=false
-Scripts/Python/*.ipynb linguist-vendored=false
+*.ipynb linguist-language=Python
+*.ipynb linguist-detectable=true
