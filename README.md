@@ -1,4 +1,4 @@
-# A Single-Cell Bioprinting Approach with Subcellular Resolution to Reconstruct Native Cellular Microenvironments and Interrogate Spatial Biology
+# A Single-Cell Bioprinting Approach with Subcellular Resolution to Reconstruct Native Cellular Microenvironments
 
 <img width="5819" height="3669" alt="Helms et al  Graphical Abstract" src="https://github.com/user-attachments/assets/55580550-902f-415e-afdf-0f43ec041e84" />
 
