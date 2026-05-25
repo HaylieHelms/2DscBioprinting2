@@ -5,13 +5,15 @@
 Preprint: https://www.biorxiv.org/content/10.1101/2024.02.01.578499v2
 
 ### Abstract
-Tissue development, function, and disease are largely driven by the spatial organization of individual cells and their interactions within a complex and heterogeneous cellular microenvironment. Engineered tissue models provide a controllable platform to dissect these spatially driven processes. However, strategies to fabricate tissues that replicate near-exact spatial organization and cellular composition of native microenvironments, necessary to faithfully recapitulate in vivo spatial relationships, have remained elusive to date. Here we present a precision bioprinting approach capable of generating high-fidelity replicas of patient biopsies that preserve complex cellular organization and heterogeneity with subcellular resolution. We demonstrate spatial placement of individual cells with down to 3.14 µm spatial precision and up to eight cell types per bioprint. Using this approach, we demonstrate for the first time that altering the microscale spatial organization of tumor microenvironments of similar cellular composition can significantly alter transcriptomic changes of cell response. The ability to engineer and manipulate native cellular microenvironments with single-cell resolution marks a significant advancement toward understanding the critical influence of spatial biology on complex biological systems, such as the tumor microenvironment and organogenesis.
+Tissue development and function are determined by the spatial organization of individual cells and their interactions. Yet experimental platforms capable of reconstructing cellular organization with single-cell precision for systematic interrogation remain lacking. Here we introduce a single-cell bioprinting platform that enables programmable reconstruction of cellular microenvironments through controlled single-cell placement with down to subcellular spatial control. We demonstrate intercellular spacing down to 1.3 µm, multiplexed deposition of up to eight cell types within a single construct, and reconstruction of biopsy-derived native cellular organization with 99% accuracy for single-cell placement relative to their native tissue coordinates. Using this framework, we show that manipulation of cellular arrangement allows for controlled interrogation of spatial transcriptional programs, cell–cell signaling networks, and migration dynamics in complex tissue microenvironments. This platform provides a generalizable experimental framework for causal interrogation of spatially defined cell–cell interactions at single-cell resolution.
+
 
 ## Repository
 This repository contains the scripts used to analyze single-cell migration behavior in the bioprinted cell-cell interaction arrays and the spatial transcriptomics (Visium HD) data. 
 
-## Data Availaability 
+## Data Availability
   • Gene Expression Omnibus, https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE315233
+  • Source data, [View Source Data](Scripts/R/SourceData)
 
 ## Associated Protocol
 For detailed instructions on running Visium HD on engineered tissues, including sample preparation and processing, see our accompanying protocol: https://star-protocols.cell.com/protocols/4456 
