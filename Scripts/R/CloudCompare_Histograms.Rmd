@@ -1,0 +1,851 @@
+---
+title: "CloudCompare Histogram Plotting"
+author: "Haylie Helms"
+date: "2026-01-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(scales)
+```
+
+# 1.) Big ROI - Main Fig
+## Load
+```{r}
+file_path <- "~/Documents/CloudCompare_HistogramValues.csv"  # change if needed
+
+df <- read_delim(
+  file = file_path,
+  delim = ";",
+  trim_ws = TRUE,
+  show_col_types = FALSE
+) %>%
+  # CloudCompare sometimes leaves an empty last column because of trailing ;
+  select(where(~ !all(is.na(.)))) %>%
+  rename(
+    class = `Class`,
+    count = `Value`,
+    start = `Class start`,
+    end   = `Class end`
+  ) %>%
+  mutate(
+    class = as.integer(class),
+    count = as.numeric(count),
+    start = as.numeric(start),
+    end   = as.numeric(end),
+    mid   = (start + end) / 2,
+    width = end - start
+  ) %>%
+  filter(is.finite(count), is.finite(start), is.finite(end), width > 0)
+
+```
+
+```{r}
+ggplot(df, aes(x = mid, y = count)) +
+  geom_col(width = df$width[1]) +
+  theme_classic(base_size = 14) +
+  labs(
+    title = "CloudCompare Distance Histogram",
+    x = "Bioprint Result to Map Absolute Distance (µm)",
+    y = "Count"
+  )
+```
+
+## Rebin to 0.5 µm
+```{r}
+# Rebin
+rebin_hist <- function(df, new_binwidth = 0.5) {
+
+  df <- df %>%
+    filter(is.finite(start), is.finite(end), is.finite(count),
+           end > start, count >= 0) %>%
+    arrange(start)
+
+  # Define new bin edges (rounded to the new bin width)
+  min_edge <- floor(min(df$start) / new_binwidth) * new_binwidth
+  max_edge <- ceiling(max(df$end)  / new_binwidth) * new_binwidth
+  edges <- seq(min_edge, max_edge, by = new_binwidth)
+
+  out <- tibble(
+    start = edges[-length(edges)],
+    end   = edges[-1],
+    count = 0
+  )
+
+  # Distribute old bin counts into new bins proportional to overlap
+  for (i in seq_len(nrow(df))) {
+    a <- df$start[i]
+    b <- df$end[i]
+    c <- df$count[i]
+    w <- b - a
+    if (w <= 0 || c == 0) next
+
+    # which new bins overlap this old bin?
+    j0 <- max(1, floor((a - min_edge) / new_binwidth) + 1)
+    j1 <- min(nrow(out), ceiling((b - min_edge) / new_binwidth))
+
+    for (j in j0:j1) {
+      oa <- max(a, out$start[j])
+      ob <- min(b, out$end[j])
+      overlap <- ob - oa
+
+      if (overlap > 0) {
+        out$count[j] <- out$count[j] + c * (overlap / w)
+      }
+    }
+  }
+
+  out %>%
+    mutate(
+      mid   = (start + end) / 2,
+      width = end - start
+    )
+}
+
+```
+
+```{r}
+df_05um <- rebin_hist(df, new_binwidth = 0.5)
+
+
+# Sanity check
+c(
+  original_total = sum(df$count),
+  rebinned_total = sum(df_05um$count)
+)
+
+```
+
+```{r}
+new_grad <- c("#EFEDC8", "#84B56E", "#408B80", "#31618C", "#0E1424")
+
+ggplot(df_05um, aes(x = mid, y = count, fill = mid)) +
+  geom_col(width = 0.5) +
+  theme_classic(base_size = 14) +
+  scale_x_continuous(
+    limits = c(0, 25),
+    breaks = seq(0, 25, by = 2),
+    expand = c(0, 0),
+  ) +
+  scale_y_continuous(expand = c(0.004, 0)) +
+  scale_fill_gradientn(
+    colours = new_grad,
+    limits  = c(0, 26),
+    oob     = scales::squish,
+    name    = "C2M\nDistance (µm)"
+  ) +
+  labs(
+    title = "CloudCompare C2M Distance Histogram (0.5 µm bins)",
+    x = "Bioprint Result to Map Absolute Distances (µm)",
+    y = "Number of Sampled Mesh Vertices"
+  )
+```
+
+## Plot
+```{r}
+binw <- 0.5
+
+# weighted mean and SD from the binned histogram
+N <- sum(df_05um$count)
+
+mu <- weighted.mean(df_05um$mid, w = df_05um$count, na.rm = TRUE)
+sd <- sqrt(sum(df_05um$count * (df_05um$mid - mu)^2) / (N - 1))
+
+# Gaussian curve scaled to counts per bin
+xgrid <- seq(0, 26, by = 0.01)
+gauss_df <- data.frame(
+  x = xgrid,
+  y = N * binw * dnorm(xgrid, mean = mu, sd = sd)
+)
+
+new_grad <- c("#EFEDC8", "#84B56E", "#408B80", "#31618C", "#0E1424")
+
+prtin1_histogram <- ggplot(df_05um, aes(x = mid, y = count, fill = mid)) +
+  geom_col(width = binw) +
+    geom_vline(xintercept = 18, color = "#B64249", linewidth = 0.3) +
+  geom_line(
+    data = gauss_df,
+    aes(x = x, y = y),
+    inherit.aes = FALSE,
+    linewidth = 0.5,
+    colour = "#5E5E5E"
+  ) +
+  theme_classic(base_size = 10) +
+  scale_x_continuous(
+    limits = c(0, 26),
+    breaks = seq(0, 26, by = 2),
+    expand = c(0, 0)
+  ) +
+  scale_y_continuous(expand = c(0.005, 0)) +
+  scale_fill_gradientn(
+    colours = new_grad,
+    limits  = c(0, 26),
+    oob     = scales::squish,
+    name    = "Absolute \nDistance (µm) "
+  ) +
+  labs(
+    title = sprintf("Gauss: mean = %.2f / std.dev. = %.2f", mu, sd),
+    x = "Bioprint Result to Bioprint Map Absolute Distance (µm)",
+    y = "Number of Sampled Mesh Vertices"
+  )
+
+ggsave(
+  "Print1_Histogram.png",
+  prtin1_histogram,
+  width = 7, height = 4, dpi = 600
+)
+
+
+prtin1_histogram
+```
+## Stats
+```{r}
+threshold <- 18
+
+pct_tbl <- df_05um %>%
+  mutate(
+    frac_below = pmax(0, pmin(end, threshold) - start) / (end - start),
+    count_below = count * frac_below,
+    frac_above = pmax(0, end - pmax(start, threshold)) / (end - start),
+    count_above = count * frac_above
+  ) %>%
+  summarise(
+    total = sum(count),
+    pct_below = round(100 * sum(count_below) / total, 2),
+    pct_above = round(100 * sum(count_above) / total, 2)
+  )
+
+pct_tbl
+```
+
+
+# 2.) Fidelity ROI 1
+```{r}
+file_path <- "~/Documents/ROI_Results_1.csv"
+
+Fid_ROI_1_raw <- read_delim(
+  file = file_path,
+  delim = ";",
+  trim_ws = TRUE,
+  show_col_types = FALSE
+) %>%
+  # CloudCompare sometimes leaves an empty last column because of trailing ;
+  select(where(~ !all(is.na(.)))) %>%
+  rename(
+    class = `Class`,
+    count = `Value`,
+    start = `Class start`,
+    end   = `Class end`
+  ) %>%
+  mutate(
+    class = as.integer(class),
+    count = as.numeric(count),
+    start = as.numeric(start),
+    end   = as.numeric(end),
+    mid   = (start + end) / 2,
+    width = end - start
+  ) %>%
+  filter(is.finite(count), is.finite(start), is.finite(end), width > 0)
+
+ggplot(Fid_ROI_1_raw, aes(x = mid, y = count)) +
+  geom_col(width = df$width[1]) +
+  theme_classic(base_size = 14) +
+  labs(
+    title = "CloudCompare Distance Histogram",
+    x = "Bioprint Result to Map Absolute Distance (µm)",
+    y = "Count"
+  )
+```
+
+## Rebin to 0.5 µm
+```{r}
+rebin_hist <- function(df, new_binwidth = 0.5) {
+
+  df <- df %>%
+    filter(is.finite(start), is.finite(end), is.finite(count),
+           end > start, count >= 0) %>%
+    arrange(start)
+
+  min_edge <- floor(min(df$start) / new_binwidth) * new_binwidth
+  max_edge <- ceiling(max(df$end)  / new_binwidth) * new_binwidth
+  edges <- seq(min_edge, max_edge, by = new_binwidth)
+
+  out <- tibble(
+    start = edges[-length(edges)],
+    end   = edges[-1],
+    count = 0
+  )
+
+  for (i in seq_len(nrow(df))) {
+    a <- df$start[i]
+    b <- df$end[i]
+    c <- df$count[i]
+    w <- b - a
+    if (w <= 0 || c == 0) next
+
+    j0 <- max(1, floor((a - min_edge) / new_binwidth) + 1)
+    j1 <- min(nrow(out), ceiling((b - min_edge) / new_binwidth))
+
+    for (j in j0:j1) {
+      oa <- max(a, out$start[j])
+      ob <- min(b, out$end[j])
+      overlap <- ob - oa
+
+      if (overlap > 0) {
+        out$count[j] <- out$count[j] + c * (overlap / w)
+      }
+    }
+  }
+
+  out %>%
+    mutate(
+      mid   = (start + end) / 2,
+      width = end - start
+    )
+}
+
+df_05um_Fid_ROI_1 <- rebin_hist(Fid_ROI_1_raw, new_binwidth = 0.5)
+
+# Sanity check (should match closely)
+c(
+  original_total = sum(Fid_ROI_1_raw$count),
+  rebinned_total = sum(df_05um_Fid_ROI_1$count)
+)
+```
+
+## Gaussian fit + plot
+```{r}
+binw <- 0.5
+threshold <- 18
+
+# weighted mean and SD from the binned histogram
+N  <- sum(df_05um_Fid_ROI_1$count)
+mu <- weighted.mean(df_05um_Fid_ROI_1$mid, w = df_05um_Fid_ROI_1$count, na.rm = TRUE)
+sd <- sqrt(sum(df_05um_Fid_ROI_1$count * (df_05um_Fid_ROI_1$mid - mu)^2) / (N - 1))
+
+# Data-driven x-range (use ends, not mids)
+xmin <- min(df_05um_Fid_ROI_1$start, na.rm = TRUE)
+xmax <- max(df_05um_Fid_ROI_1$end,   na.rm = TRUE)
+
+# Gaussian curve only over the plotted data range
+xgrid <- seq(xmin, xmax, by = 0.01)
+gauss_df <- data.frame(
+  x = xgrid,
+  y = N * binw * dnorm(xgrid, mean = mu, sd = sd)
+)
+
+# Data-driven fill limits
+fill_limits <- range(df_05um_Fid_ROI_1$mid, na.rm = TRUE)
+
+# Reasonable breaks without hard-coding
+x_breaks <- pretty(c(xmin, xmax), n = 7)
+
+new_grad <- c("#EFEDC8", "#84B56E", "#408B80", "#31618C", "#0E1424")
+
+Fid_ROI_1 <- ggplot(df_05um_Fid_ROI_1, aes(x = mid, y = count, fill = mid)) +
+  geom_col(width = binw) +
+  # Only draw the threshold line if it actually falls in range
+  { if (threshold >= xmin && threshold <= xmax)
+      geom_vline(xintercept = threshold, color = "#B64249", linewidth = 0.3)
+    else NULL
+  } +
+  geom_line(
+    data = gauss_df,
+    aes(x = x, y = y),
+    inherit.aes = FALSE,
+    linewidth = 0.5,
+    colour = "#5E5E5E"
+  ) +
+  theme_classic(base_size = 10) +
+  scale_x_continuous(
+    breaks = x_breaks,
+    expand = c(0, 0)
+  ) +
+  scale_y_continuous(expand = c(0.005, 0)) +
+  scale_fill_gradientn(
+    colours = new_grad,
+    limits  = fill_limits,
+    oob     = scales::squish,
+    name    = "Absolute \nDistance (µm) "
+  ) +
+  labs(
+    title = sprintf("Gauss: mean = %.2f / std.dev. = %.2f", mu, sd),
+    x = "Bioprint Result to Bioprint Map Absolute Distance (µm)",
+    y = "Number of Sampled Mesh Vertices"
+  ) +
+  # If you want to "zoom", do it here (no row dropping, no warnings):
+  coord_cartesian(xlim = c(max(0, xmin), xmax))
+
+ggsave(
+  "Fid_ROI_1_Histogram.png",
+  Fid_ROI_1,
+  width = 6, height = 4, dpi = 600
+)
+
+Fid_ROI_1
+```
+
+## 18 µm cutoff Stats
+```{r}
+pct_tbl_Fid_ROI_1 <- df_05um_Fid_ROI_1 %>%
+  mutate(
+    frac_below  = pmax(0, pmin(end, threshold) - start) / (end - start),
+    count_below = count * frac_below,
+    frac_above  = pmax(0, end - pmax(start, threshold)) / (end - start),
+    count_above = count * frac_above
+  ) %>%
+  summarise(
+    total     = sum(count),
+    pct_below = round(100 * sum(count_below) / total, 2),
+    pct_above = round(100 * sum(count_above) / total, 2)
+  )
+
+pct_tbl_Fid_ROI_1
+```
+
+
+
+# 3.) Fidelity ROI 2
+```{r}
+file_path <- "~/Documents/ROI_Results_2.csv"
+
+Fid_ROI_2_raw <- read_delim(
+  file = file_path,
+  delim = ";",
+  trim_ws = TRUE,
+  show_col_types = FALSE
+) %>%
+  # CloudCompare sometimes leaves an empty last column because of trailing ;
+  select(where(~ !all(is.na(.)))) %>%
+  rename(
+    class = `Class`,
+    count = `Value`,
+    start = `Class start`,
+    end   = `Class end`
+  ) %>%
+  mutate(
+    class = as.integer(class),
+    count = as.numeric(count),
+    start = as.numeric(start),
+    end   = as.numeric(end),
+    mid   = (start + end) / 2,
+    width = end - start
+  ) %>%
+  filter(is.finite(count), is.finite(start), is.finite(end), width > 0)
+
+ggplot(Fid_ROI_2_raw, aes(x = mid, y = count)) +
+  geom_col(width = Fid_ROI_2_raw$width[1]) +
+  theme_classic(base_size = 14) +
+  labs(
+    title = "CloudCompare Distance Histogram",
+    x = "Bioprint Result to Map Absolute Distance (µm)",
+    y = "Count"
+  )
+```
+
+## Rebin to 0.5 µm
+```{r}
+rebin_hist <- function(df, new_binwidth = 0.5) {
+
+  df <- df %>%
+    filter(is.finite(start), is.finite(end), is.finite(count),
+           end > start, count >= 0) %>%
+    arrange(start)
+
+  min_edge <- floor(min(df$start) / new_binwidth) * new_binwidth
+  max_edge <- ceiling(max(df$end)  / new_binwidth) * new_binwidth
+  edges <- seq(min_edge, max_edge, by = new_binwidth)
+
+  out <- tibble(
+    start = edges[-length(edges)],
+    end   = edges[-1],
+    count = 0
+  )
+
+  for (i in seq_len(nrow(df))) {
+    a <- df$start[i]
+    b <- df$end[i]
+    c <- df$count[i]
+    w <- b - a
+    if (w <= 0 || c == 0) next
+
+    j0 <- max(1, floor((a - min_edge) / new_binwidth) + 1)
+    j1 <- min(nrow(out), ceiling((b - min_edge) / new_binwidth))
+
+    for (j in j0:j1) {
+      oa <- max(a, out$start[j])
+      ob <- min(b, out$end[j])
+      overlap <- ob - oa
+
+      if (overlap > 0) {
+        out$count[j] <- out$count[j] + c * (overlap / w)
+      }
+    }
+  }
+
+  out %>%
+    mutate(
+      mid   = (start + end) / 2,
+      width = end - start
+    )
+}
+
+df_05um_Fid_ROI_2 <- rebin_hist(Fid_ROI_2_raw, new_binwidth = 0.5)
+
+# Sanity check (should match closely)
+c(
+  original_total = sum(Fid_ROI_2_raw$count),
+  rebinned_total = sum(df_05um_Fid_ROI_2$count)
+)
+```
+
+## Guassian fit + plot
+```{r}
+binw <- 0.5
+threshold <- 18
+
+# weighted mean and SD from the binned histogram
+N  <- sum(df_05um_Fid_ROI_2$count)
+mu <- weighted.mean(df_05um_Fid_ROI_2$mid, w = df_05um_Fid_ROI_2$count, na.rm = TRUE)
+sd <- sqrt(sum(df_05um_Fid_ROI_2$count * (df_05um_Fid_ROI_2$mid - mu)^2) / (N - 1))
+
+# Data-driven x-range (use ends, not mids)
+xmin <- min(df_05um_Fid_ROI_2$start, na.rm = TRUE)
+xmax <- max(df_05um_Fid_ROI_2$end,   na.rm = TRUE)
+
+# Gaussian curve only over the plotted data range
+xgrid <- seq(xmin, xmax, by = 0.01)
+gauss_df <- data.frame(
+  x = xgrid,
+  y = N * binw * dnorm(xgrid, mean = mu, sd = sd)
+)
+
+# Data-driven fill limits
+fill_limits <- range(df_05um_Fid_ROI_2$mid, na.rm = TRUE)
+
+# x axis breaks
+x_breaks <- pretty(c(xmin, xmax), n = 7)
+
+# legend breaks every 2 µm
+legend_breaks <- seq(
+  from = ceiling(fill_limits[1] / 2) * 2,
+  to   = floor(fill_limits[2] / 2) * 2,
+  by   = 2
+)
+
+new_grad <- c("#EFEDC8", "#84B56E", "#408B80", "#31618C", "#0E1424")
+
+Fid_ROI_2 <- ggplot(df_05um_Fid_ROI_2, aes(x = mid, y = count, fill = mid)) +
+  geom_col(width = binw) +
+  { if (threshold >= xmin && threshold <= xmax)
+      geom_vline(xintercept = threshold, color = "#B64249", linewidth = 0.3)
+    else NULL
+  } +
+  geom_line(
+    data = gauss_df,
+    aes(x = x, y = y),
+    inherit.aes = FALSE,
+    linewidth = 0.5,
+    colour = "#5E5E5E"
+  ) +
+  theme_classic(base_size = 10) +
+  scale_x_continuous(
+    breaks = x_breaks,
+    expand = c(0, 0)
+  ) +
+  scale_y_continuous(expand = c(0.005, 0)) +
+  scale_fill_gradientn(
+    colours = new_grad,
+    limits  = fill_limits,
+    breaks  = legend_breaks,   # <<<<< key change
+    oob     = scales::squish,
+    name    = "Absolute \nDistance (µm) "
+  ) +
+  labs(
+    title = sprintf("Gauss: mean = %.2f / std.dev. = %.2f", mu, sd),
+    x = "Bioprint Result to Bioprint Map Absolute Distance (µm)",
+    y = "Number of Sampled Mesh Vertices"
+  ) +
+  coord_cartesian(xlim = c(max(0, xmin), xmax))
+
+ggsave(
+  "Fid_ROI_2_Histogram.png",
+  Fid_ROI_2,
+  width = 6, height = 4, dpi = 600
+)
+
+Fid_ROI_2
+```
+
+## 18 µm cutoff Stats
+```{r}
+pct_tbl_Fid_ROI_2 <- df_05um_Fid_ROI_2 %>%
+  mutate(
+    frac_below  = pmax(0, pmin(end, threshold) - start) / (end - start),
+    count_below = count * frac_below,
+    frac_above  = pmax(0, end - pmax(start, threshold)) / (end - start),
+    count_above = count * frac_above
+  ) %>%
+  summarise(
+    total     = sum(count),
+    pct_below = round(100 * sum(count_below) / total, 2),
+    pct_above = round(100 * sum(count_above) / total, 2)
+  )
+
+pct_tbl_Fid_ROI_2
+
+```
+
+
+# 4.) Fidelity ROI 3
+```{r}
+file_path <- "~/Documents/ROI_Results_3.csv"
+
+Fid_ROI_3_raw <- read_delim(
+  file = file_path,
+  delim = ";",
+  trim_ws = TRUE,
+  show_col_types = FALSE
+) %>%
+  select(where(~ !all(is.na(.)))) %>%
+  rename(
+    class = `Class`,
+    count = `Value`,
+    start = `Class start`,
+    end   = `Class end`
+  ) %>%
+  mutate(
+    class = as.integer(class),
+    count = as.numeric(count),
+    start = as.numeric(start),
+    end   = as.numeric(end),
+    mid   = (start + end) / 2,
+    width = end - start
+  ) %>%
+  filter(is.finite(count), is.finite(start), is.finite(end), width > 0)
+
+# Base histogram (raw bins)
+ggplot(Fid_ROI_3_raw, aes(x = mid, y = count)) +
+  geom_col(width = Fid_ROI_3_raw$width[1]) +
+  theme_classic(base_size = 14) +
+  labs(
+    title = "CloudCompare Distance Histogram",
+    x = "Bioprint Result to Map Absolute Distance (µm)",
+    y = "Count"
+  )
+```
+
+## Rebin to 0.5 µm
+```{r}
+df_05um_Fid_ROI_3 <- rebin_hist(Fid_ROI_3_raw, new_binwidth = 0.5)
+
+# Sanity check (should match closely)
+c(
+  original_total = sum(Fid_ROI_3_raw$count),
+  rebinned_total = sum(df_05um_Fid_ROI_3$count)
+)
+```
+
+## Guassin fit + plot
+```{r}
+binw <- 0.5
+threshold <- 18
+
+N  <- sum(df_05um_Fid_ROI_3$count)
+mu <- weighted.mean(df_05um_Fid_ROI_3$mid, w = df_05um_Fid_ROI_3$count, na.rm = TRUE)
+sd <- sqrt(sum(df_05um_Fid_ROI_3$count * (df_05um_Fid_ROI_3$mid - mu)^2) / (N - 1))
+
+xmin <- min(df_05um_Fid_ROI_3$start, na.rm = TRUE)
+xmax <- max(df_05um_Fid_ROI_3$end,   na.rm = TRUE)
+
+xgrid <- seq(xmin, xmax, by = 0.01)
+gauss_df <- data.frame(
+  x = xgrid,
+  y = N * binw * dnorm(xgrid, mean = mu, sd = sd)
+)
+
+fill_limits <- range(df_05um_Fid_ROI_3$mid, na.rm = TRUE)
+x_breaks <- pretty(c(xmin, xmax), n = 7)
+
+new_grad <- c("#EFEDC8", "#84B56E", "#408B80", "#31618C", "#0E1424")
+
+Fid_ROI_3 <- ggplot(df_05um_Fid_ROI_3, aes(x = mid, y = count, fill = mid)) +
+  geom_col(width = binw) +
+  { if (threshold >= xmin && threshold <= xmax)
+      geom_vline(xintercept = threshold, color = "#B64249", linewidth = 0.3)
+    else NULL
+  } +
+  geom_line(
+    data = gauss_df,
+    aes(x = x, y = y),
+    inherit.aes = FALSE,
+    linewidth = 0.5,
+    colour = "#5E5E5E"
+  ) +
+  theme_classic(base_size = 10) +
+  scale_x_continuous(
+    breaks = x_breaks,
+    expand = c(0, 0)
+  ) +
+  scale_y_continuous(expand = c(0.005, 0)) +
+  scale_fill_gradientn(
+    colours = new_grad,
+    limits  = fill_limits,
+    oob     = scales::squish,
+    name    = "Absolute \nDistance (µm) "
+  ) +
+  labs(
+    title = sprintf("Gauss: mean = %.2f / std.dev. = %.2f", mu, sd),
+    x = "Bioprint Result to Bioprint Map Absolute Distance (µm)",
+    y = "Number of Sampled Mesh Vertices"
+  ) +
+  coord_cartesian(xlim = c(max(0, xmin), xmax))
+
+ggsave(
+  "Fid_ROI_3_Histogram.png",
+  Fid_ROI_3,
+  width = 6, height = 4, dpi = 600
+)
+
+Fid_ROI_3
+```
+
+
+## 18 µm cutoff Stats
+```{r}
+pct_tbl_Fid_ROI_3 <- df_05um_Fid_ROI_3 %>%
+  mutate(
+    frac_below  = pmax(0, pmin(end, threshold) - start) / (end - start),
+    count_below = count * frac_below,
+    frac_above  = pmax(0, end - pmax(start, threshold)) / (end - start),
+    count_above = count * frac_above
+  ) %>%
+  summarise(
+    total     = sum(count),
+    pct_below = round(100 * sum(count_below) / total, 2),
+    pct_above = round(100 * sum(count_above) / total, 2)
+  )
+
+pct_tbl_Fid_ROI_3
+```
+
+
+
+# 5.) All data together
+```{r}
+binw <- 0.5
+
+roi_cols <- c(
+  "Main ROI"  = "#718F77",
+  "Fid ROI 1" = "#796089",
+  "Fid ROI 2" = "#DD9358",
+  "Fid ROI 3" = "#6A7AA1"
+)
+
+# Combine all rebinned histograms (counts)
+overlay_hist_df <- bind_rows(
+  df_05um %>% mutate(dataset = "Main ROI"),
+  df_05um_Fid_ROI_1 %>% mutate(dataset = "Fid ROI 1"),
+  df_05um_Fid_ROI_2 %>% mutate(dataset = "Fid ROI 2"),
+  df_05um_Fid_ROI_3 %>% mutate(dataset = "Fid ROI 3")
+) %>%
+  mutate(dataset = factor(dataset, levels = names(roi_cols))) %>%
+  arrange(dataset, start)
+
+# Total histogram (summed counts)
+total_hist <- overlay_hist_df %>%
+  group_by(start, end) %>%
+  summarise(count = sum(count, na.rm = TRUE), .groups = "drop") %>%
+  mutate(
+    mid   = (start + end) / 2,
+    width = end - start
+  ) %>%
+  arrange(start)
+
+# Common x-range/grid
+xmin <- min(total_hist$start, na.rm = TRUE)
+xmax <- max(total_hist$end,   na.rm = TRUE)
+xgrid <- seq(xmin, xmax, by = 0.01)
+
+# Overall Gaussian from total (summed counts across datasets)
+N_tot  <- sum(total_hist$count, na.rm = TRUE)
+mu_tot <- weighted.mean(total_hist$mid, w = total_hist$count, na.rm = TRUE)
+sd_tot <- sqrt(sum(total_hist$count * (total_hist$mid - mu_tot)^2, na.rm = TRUE) / pmax(1, N_tot - 1))
+
+gauss_total <- data.frame(
+  x = xgrid,
+  y = N_tot * binw * dnorm(xgrid, mean = mu_tot, sd = sd_tot)
+)
+
+x_breaks <- pretty(c(xmin, xmax), n = 7)
+
+Hist_GrayBars_OnlyTotalGauss <- ggplot() +
+  # Gray histogram for total
+  geom_col(
+    data = total_hist,
+    aes(x = mid, y = count),
+    width = 0.55,
+    fill = "#AFABAB",
+    alpha = 0.45
+  ) +
+  # Optional: fill under the overall Gaussian
+  geom_ribbon(
+    data = gauss_total,
+    aes(x = x, ymin = 0, ymax = y),
+    inherit.aes = FALSE,
+    fill = "forestgreen",
+    alpha = 0.10
+  ) +
+  # Overall Gaussian (single curve)
+  geom_line(
+    data = gauss_total,
+    aes(x = x, y = y),
+    inherit.aes = FALSE,
+    linewidth = 1.1,
+    colour = "forestgreen"
+  ) +
+  # geom_vline(xintercept = 18, color = "#B64249", linewidth = 0.3) +
+  theme_classic(base_size = 11) +
+  scale_x_continuous(breaks = x_breaks, expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  labs(
+    title = sprintf("Total histogram + Gaussian fit (mean=%.2f, sd=%.2f)", mu_tot, sd_tot),
+    x = "Bioprint Result to Bioprint Map Absolute Distance (µm)",
+    y = "Number of Sampled Mesh Vertices"
+  ) +
+  coord_cartesian(xlim = c(max(0, xmin), xmax))
+
+ggsave(
+  "All_ROIs_GrayBars_OnlyTotalGaussian.png",
+  Hist_GrayBars_OnlyTotalGauss,
+  width = 6.5, height = 4, dpi = 600
+)
+
+Hist_GrayBars_OnlyTotalGauss
+
+```
+
+## 18 µm cutoff Stats
+```{r}
+pct_tbl_ALL <- overlay_hist_df %>%
+  mutate(
+    frac_below  = pmax(0, pmin(end, threshold) - start) / (end - start),
+    count_below = count * frac_below,
+    frac_above  = pmax(0, end - pmax(start, threshold)) / (end - start),
+    count_above = count * frac_above
+  ) %>%
+  summarise(
+    total     = sum(count),
+    pct_below = round(100 * sum(count_below) / total, 2),
+    pct_above = round(100 * sum(count_above) / total, 2)
+  )
+
+pct_tbl_ALL
+```
