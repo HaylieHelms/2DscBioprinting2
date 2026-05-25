@@ -1,0 +1,10 @@
+source,target,weight_pat,weight_rand,delta,abs_delta,pair
+MCF7,MCF7,14,28,-14,14,MCF7 → MCF7
+MCF10A,MCF7,15,29,-14,14,MCF10A → MCF7
+Fibroblast,MCF10A,29,16,13,13,Fibroblast → MCF10A
+Fibroblast,MCF7,16,29,-13,13,Fibroblast → MCF7
+MCF10A,MCF10A,26,16,10,10,MCF10A → MCF10A
+MCF7,MCF10A,23,16,7,7,MCF7 → MCF10A
+MCF7,Fibroblast,24,28,-4,4,MCF7 → Fibroblast
+MCF10A,Fibroblast,27,29,-2,2,MCF10A → Fibroblast
+Fibroblast,Fibroblast,30,29,1,1,Fibroblast → Fibroblast

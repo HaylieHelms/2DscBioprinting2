@@ -1,0 +1,10 @@
+source,target,weight
+Fibroblast,Fibroblast,29
+Fibroblast,MCF10A,16
+Fibroblast,MCF7,29
+MCF10A,Fibroblast,29
+MCF10A,MCF10A,16
+MCF10A,MCF7,29
+MCF7,Fibroblast,28
+MCF7,MCF10A,16
+MCF7,MCF7,28
