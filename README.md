@@ -12,7 +12,7 @@ Tissue development and function are determined by the spatial organization of in
 This repository contains the scripts used to analyze single-cell migration behavior in the bioprinted cell-cell interaction arrays and the spatial transcriptomics (Visium HD) data. 
 
 ## Data Availability
-  - Gene Expression Omnibus, https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE315233
+  - The spatial transcriptomics data generated in this work have been deposited in the GEO database, https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE315233
   - [Source Data](Scripts/R/SourceData)
 
 ## Associated Protocol
