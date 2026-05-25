@@ -12,8 +12,8 @@ Tissue development and function are determined by the spatial organization of in
 This repository contains the scripts used to analyze single-cell migration behavior in the bioprinted cell-cell interaction arrays and the spatial transcriptomics (Visium HD) data. 
 
 ## Data Availability
-  • Gene Expression Omnibus, https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE315233
-  • Source data, [View Source Data](Scripts/R/SourceData)
+  - Gene Expression Omnibus, https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE315233
+  - [Source Data](Scripts/R/SourceData)
 
 ## Associated Protocol
 For detailed instructions on running Visium HD on engineered tissues, including sample preparation and processing, see our accompanying protocol: https://star-protocols.cell.com/protocols/4456 
